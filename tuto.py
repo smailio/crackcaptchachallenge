@@ -4,17 +4,16 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import numpy as np
-#import keras as k
+print("coco")
+import keras as k
 import sklearn.preprocessing
 import pickle
 
 
 def run_training(path):
-
     X = []
     Y = []
 
-    # Loop over all training images
     for filename in tqdm(os.listdir(path)):
         word, level, ext = filename.split(".")
 
@@ -23,14 +22,15 @@ def run_training(path):
 
         # 1 - Load current image -----------------------------------------------
         image = cv2.imread(os.path.join(path, filename))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         # 2 - Separate the letters ---------------------------------------------
         for i, letter in enumerate(word):
-            X.append(image[0:35, (i * 20):((i+1) * 20)])
+            X.append(image[0:35, (i * 20):((i + 1) * 20)].flatten())
             Y.append(letter)
 
     # 3 - Learn from this dataset X Y ------------------------------------------
-    X = np.array(X, dtype=np.float) / 255.0 # Normalization
+    X = np.array(X, dtype=np.float) / 255.0  # Normalization
     Y = np.array(Y)
 
     # Transform letter in a binary vector representation
@@ -38,20 +38,27 @@ def run_training(path):
     Y = lb.transform(Y)
     nb_labels = len(lb.classes_)
 
+
     # Store labels
     with open("./model/labels.dat", "wb") as f:
         pickle.dump(lb, f)
 
-    #model = k.models.Sequential()
+    model = k.models.Sequential()
+    model.add(k.layers.Dense(128, input_dim=(20 * 35), activation='relu'))
+    model.add(k.layers.Dense(nb_labels, activation="softmax"))
+
+    model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy"])
+    model.fit(X, Y, validation_split=0.2, batch_size=128, epochs=20, verbose=1)
+
     # TODO: create a network
 
     # 4 - store you model ------------------------------------------------------
-    #model.save("./model/model_v1.hdf5")
+    model.save("./model/model_v1.hdf5")
 
 
 def run_inference(path):
 
-    #model = k.models.load_model("./model/model_v1.hdf5")
+    model = k.models.load_model("./model/model_v1.hdf5")
     with open("./model/labels.dat", "rb") as file:
         labels = pickle.load(file)
 
@@ -66,18 +73,22 @@ def run_inference(path):
 
         # 1 - Load current image -----------------------------------------------
         image = cv2.imread(os.path.join(path, filename))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         X = []
         # 2 - Separate the letters ---------------------------------------------
         for i in range(4):
-            X.append(image[0:35, (i * 20):((i + 1) * 20)])
+            X.append(image[0:35, (i * 20):((i + 1) * 20)].flatten())
 
         X = np.array(X, dtype=np.float) / 255.0 # Normalization
 
-        # TODO: use the network
+        prediction = model.predict(X)
+        print(prediction)
+        break
+        r = "".join(labels.inverse_transform(prediction))
 
         # Add your classification for this image
-        results.append({"0": int(id), "1": "ABCD"})
+        # results.append({"0": int(id), "1": r})
 
     # 3 - Store your results ---------------------------------------------------
     df = pd.DataFrame(results)
@@ -86,15 +97,17 @@ def run_inference(path):
 
 
 if __name__ == "__main__":
-
     # Constant variables
     training_set_path = "./train"
-    test_set_path = "./test"
+    test_set_path = "./train"
 
     # Top level functions
     print("[Training] running ...")
-    run_training(training_set_path)
+    # run_training(training_set_path)
     print("[Training] done ...")
     print("[Inference] running ...")
     run_inference(test_set_path)
     print("[Inference] done ...")
+
+
+
